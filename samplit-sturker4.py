@@ -1,7 +1,7 @@
 import sys
 import random
 
-filename = sys.argv[1]
+filename = sys.argv[1] #tiny change
 
 with open(filename) as f:
     for line in f:
