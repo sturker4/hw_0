@@ -1,0 +1,18 @@
+My models.py is the simpler of the two by far. It has five tables that match the
+assignment list exactly (InstructorProfile, StudentProfile, Course,
+Enrollment, Lecture, QRCodeUpload), each with only the fields the spec asks
+for, and no extra logic other tha  a __str__ method and a tiny helper that
+generates a random QR string. The LLM version (GPT 6 Sol High) is about four
+times longer: it uses a single UserProfile table with a role column instead of
+two profile tables, adds a separate QRCode table with hashed tokens that expire
+in a minute, and puts a lot of application logic into the models like
+clean() and save() validation, a review workflow with pending/verified/rejected
+status, photo hashing to catch duplicate uploads, and attendance-rate
+properties. That makes it the more complete model, especially on the
+anti-cheating requirement, but most of it goes beyond what HW3 asks for. It also misses one part of the
+spec: the lecture link on an upload is required, not optional. Mine was easier
+to implement. makemigrations and migrate worked on the first try, while the
+LLM's would fail in my environment because ImageField needs the Pillow
+library, and its save() overrides would need testing before they could be
+trusted. Overall the LLM output is a good source of ideas for later homeworks and a more thorough model,
+but my model is the one that fits this assignment.
