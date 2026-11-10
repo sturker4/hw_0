@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>New Course - AttendanceChimp</title>
+</head>
+<body style="text-align:center; font-family:Arial, sans-serif;">
+<h1>New Course</h1>
+<form method="post" action="/app/createCourse">
+    {% csrf_token %}
+    <p>course name: <input type="text" name="course-name"></p>
+    <p>Start time: <input type="time" name="start-time"></p>
+    <p>End time: <input type="time" name="end-time"></p>
+    <p>
+        <input type="checkbox" name="day-mon"> Mon
+        <input type="checkbox" name="day-tue"> Tue
+        <input type="checkbox" name="day-wed"> Wed
+        <input type="checkbox" name="day-thu"> Thu
+        <input type="checkbox" name="day-fri"> Fri
+    </p>
+    <p><input type="submit" value="Create Course"></p>
+</form>
+</body>
+</html>

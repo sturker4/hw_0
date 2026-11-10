@@ -12,6 +12,7 @@ from django.http import (HttpResponse, HttpResponseForbidden,
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login
+from django.utils import timezone
 from datetime import datetime
 import zoneinfo
 import json
@@ -93,6 +94,140 @@ def createUser(request):
 # ---------------------------------------------------------------------------
 # HW5  — courses, lectures, QR uploads, dump
 # ---------------------------------------------------------------------------
+
+def is_instructor(user):
+    """true if logged in and has an InstructorProfile."""
+    return (user.is_authenticated
+            and InstructorProfile.objects.filter(user=user).exists())
+
+
+def is_student(user):
+    """same thing but for students."""
+    return (user.is_authenticated
+            and StudentProfile.objects.filter(user=user).exists())
+
+
+def new_course(request):
+    """form page for making a course, posts to createCourse."""
+    return render(request, 'app/new_course.html')
+
+
+def new_lecture(request):
+    """form page for a lecture. dropdown is filled with all the course names."""
+    courses = Course.objects.all()
+    return render(request, 'app/new_lecture.html', {"courses": courses})
+
+
+def new_qr_upload(request):
+    """form page for uploading the qr code pic."""
+    return render(request, 'app/new_qr_upload.html')
+
+
+def parse_time(value):
+    """turns "10:30" (or "10:30:00") into a time object, None if its junk."""
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(value, fmt).time()
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+@csrf_exempt
+def createCourse(request):
+    """
+    instructors only (401 otherwise). reads course-name, start/end time and
+    the day-xxx checkboxes and saves a Course. bad input -> 400.
+    """
+    if not is_instructor(request.user):
+        return HttpResponse("Instructors only.", status=401)
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    name = request.POST.get("course-name", "").strip()
+    start = parse_time(request.POST.get("start-time", "").strip())
+    end = parse_time(request.POST.get("end-time", "").strip())
+    if not name or start is None or end is None:
+        return HttpResponseBadRequest("Need course-name, start-time and end-time.")
+
+    # checkboxes only show up in POST when theyre ticked
+    day_letters = [("day-mon", "M"), ("day-tue", "T"), ("day-wed", "W"),
+                   ("day-thu", "R"), ("day-fri", "F")]
+    meeting_days = "".join(letter for field, letter in day_letters
+                           if field in request.POST)
+
+    Course.objects.create(
+        name=name,
+        instructor=InstructorProfile.objects.get(user=request.user),
+        meeting_days=meeting_days,
+        start_time=start,
+        end_time=end,
+    )
+    return HttpResponse(f"Course {name} created.", status=200)
+
+
+@csrf_exempt
+def createLecture(request):
+    """
+    instructors only. choice is the course name, makes a Lecture for it with
+    a fresh qr code. unknown course -> 400.
+    """
+    if not is_instructor(request.user):
+        return HttpResponse("Instructors only.", status=401)
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    choice = request.POST.get("choice", "").strip()
+    # filter().first() instead of get() so 0 or 2+ matches dont blow up
+    course = Course.objects.filter(name=choice).first()
+    if course is None:
+        return HttpResponseBadRequest("No course with that name.")
+
+    Lecture.objects.create(course=course, date=timezone.now(),
+                           qr_code=generate_qr_code())
+    return HttpResponse(f"Lecture for {course.name} created.", status=200)
+
+
+@csrf_exempt
+def createQRCodeUpload(request):
+    """
+    students only. file comes in request.FILES as imageUpload. lecture stays
+    empty for now, matching it to a lecture is for later.
+    """
+    if not is_student(request.user):
+        return HttpResponse("Students only.", status=401)
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    f = request.FILES.get("imageUpload")
+    if f is None:
+        return HttpResponseBadRequest("No imageUpload file.")
+
+    QRCodeUpload.objects.create(
+        student=StudentProfile.objects.get(user=request.user), image=f)
+    return HttpResponse("Upload saved.", status=200)
+
+
+def dumpUploads(request):
+    """
+    instructors only, GET. gives back every upload as a list of
+    {"username", "upload_time"} with the time in chicago time.
+    """
+    if not is_instructor(request.user):
+        return HttpResponse("Instructors only.", status=401)
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    data = [
+        {
+            "username": u.student.user.username,
+            "upload_time": timezone.localtime(u.uploaded_at)
+                                   .strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        for u in QRCodeUpload.objects.all()
+    ]
+    # safe=False because its a list not a dict
+    return JsonResponse(data, safe=False)
 
 
 

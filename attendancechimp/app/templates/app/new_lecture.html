@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>New Lecture - AttendanceChimp</title>
+</head>
+<body style="text-align:center; font-family:Arial, sans-serif;">
+<h1>New Lecture</h1>
+<form method="post" action="/app/createLecture">
+    {% csrf_token %}
+    <p>Course:
+       <select name="choice">
+           {% for course in courses %}
+               <option value="{{ course.name }}">{{ course.name }}</option>
+           {% endfor %}
+       </select></p>
+    <p><input type="submit" value="Create Lecture"></p>
+</form>
+</body>
+</html>
