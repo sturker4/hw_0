@@ -18,6 +18,7 @@ Entities
 
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 import logging
 import string
@@ -62,12 +63,18 @@ class Course(models.Model):
     """
     A course taught by exactly one instructor. meeting_days areweekday
     letters such as "MWF"; start_time and end_time hold the meeting time.
+    course is the course number like DATA13600
     """
     name = models.CharField(max_length=200)
+    course = models.CharField(max_length=50, default="")
     instructor = models.ForeignKey(InstructorProfile, on_delete=models.CASCADE)
     meeting_days = models.CharField(max_length=20)
     start_time = models.TimeField()
     end_time = models.TimeField()
+
+    def meets_on_day(self, weekday):
+        """weekday is python's weekday() so 0 is monday, R is thursday"""
+        return weekday < 5 and "MTWRF"[weekday] in self.meeting_days
 
     def __str__(self):
         return self.name
@@ -116,17 +123,14 @@ class Lecture(models.Model):
 class QRCodeUpload(models.Model):
     """
     A QR-code photo uploaded by a student. lecture is optional because the
-    upload is stored first and matched after decoding. uploaded_at is set
-    automatically. one upload per student per lecture (this is for aanti-cheating).
+    upload is stored first and matched after decoding. uploaded_at defaults
+    to now but can be set by hand
     """
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE)
     lecture = models.ForeignKey(Lecture, on_delete=models.SET_NULL,
                                 null=True, blank=True)
     image = models.FileField(upload_to="qr_uploads/")
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ("student", "lecture")
+    uploaded_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return f"{self.student} -> {self.lecture}"
@@ -141,3 +145,20 @@ def generate_qr_code(length=32):
     """Return a random alphanumeric to use as a Lecture.qr_code."""
     alphabet = string.ascii_letters + string.digits
     return "".join(random.choice(alphabet) for _ in range(length))
+
+
+def getUploadsForCourse(course):
+    """
+    course is the course number. returns a list of the uploads that happened
+    during class (right day and time, checked in chicago time). [] if theres
+    no such course
+    """
+    c = Course.objects.filter(course=course).first()
+    if c is None:
+        return []
+    valid = []
+    for u in QRCodeUpload.objects.filter(lecture__course=c):
+        t = timezone.localtime(u.uploaded_at)
+        if c.meets_on_day(t.weekday()) and c.start_time <= t.time() <= c.end_time:
+            valid.append(u)
+    return valid

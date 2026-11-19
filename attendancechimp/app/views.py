@@ -19,7 +19,8 @@ import json
 import io
 
 from .models import (InstructorProfile, StudentProfile, Course, Enrollment,
-                     Lecture, QRCodeUpload, generate_qr_code)
+                     Lecture, QRCodeUpload, generate_qr_code,
+                     getUploadsForCourse)
 
 CDT = zoneinfo.ZoneInfo("America/Chicago")
 
@@ -158,6 +159,7 @@ def createCourse(request):
 
     Course.objects.create(
         name=name,
+        course=name,
         instructor=InstructorProfile.objects.get(user=request.user),
         meeting_days=meeting_days,
         start_time=start,
@@ -191,8 +193,8 @@ def createLecture(request):
 @csrf_exempt
 def createQRCodeUpload(request):
     """
-    students only. file comes in request.FILES as imageUpload. lecture stays
-    empty for now, matching it to a lecture is for later.
+    students only. file comes in request.FILES as imageUpload. gets attached
+    to the newest lecture (can be None if there arent any)
     """
     if not is_student(request.user):
         return HttpResponse("Students only.", status=401)
@@ -204,7 +206,8 @@ def createQRCodeUpload(request):
         return HttpResponseBadRequest("No imageUpload file.")
 
     QRCodeUpload.objects.create(
-        student=StudentProfile.objects.get(user=request.user), image=f)
+        student=StudentProfile.objects.get(user=request.user), image=f,
+        lecture=Lecture.objects.order_by("-date").first())
     return HttpResponse("Upload saved.", status=200)
 
 
@@ -235,5 +238,25 @@ def dumpUploads(request):
 # HW6  — getUploads
 # ---------------------------------------------------------------------------
 
+def getUploads(request):
+    """
+    instructors only. ?course=DATA13600 gives the valid uploads for that
+    course, same format as dumpUploads. no course param -> 400
+    """
+    if not is_instructor(request.user):
+        return HttpResponse("Instructors only.", status=401)
+    course = request.GET.get("course")
+    if not course:
+        return JsonResponse({"error": "Missing course parameter"}, status=400)
+
+    data = [
+        {
+            "username": u.student.user.username,
+            "upload_time": timezone.localtime(u.uploaded_at)
+                                   .strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        for u in getUploadsForCourse(course)
+    ]
+    return JsonResponse(data, safe=False)
 
 
